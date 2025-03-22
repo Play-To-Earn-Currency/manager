@@ -1,0 +1,17 @@
+{
+  "name": "pte_manager",
+  "version": "1.0",
+  "description": "A utility tool for managing play to earn token and nft",
+  "type": "module",
+  "main": "init.js",
+  "output": "manager.blob",
+  "scripts": {
+    "start": "node init.js"
+  },
+  "author": "GxperMain",
+  "license": "GPL-3.0",
+  "dependencies": {
+    "ethers": "^6.13.5",
+    "mysql2": "^3.12.0"
+  }
+}
