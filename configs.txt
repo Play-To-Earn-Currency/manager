@@ -15,13 +15,21 @@ wallet_private_key=123...
 max_gas_per_transaction=30000000000
 additional_fee_gas_per_transaction=0
 division_fee_gas_per_transaction=0
+maximum_requests_per_queue=5
 
 # Distribute Tokens
 distribute_tokens_file_path=./example.json
 minimum_value_to_distribute=1000000000000000000
-maximum_requests_per_queue=5
 distribute_tokens_database_ip=localhost
 distribute_tokens_database_name=pte_wallets
 distribute_tokens_database_username=pte_admin
 distribute_tokens_database_password=supersecretpassword
-distribute_tokens_database_tables=["tf2","vintagestory","nmrih"]
+distribute_tokens_database_tables=["tf","vintagestory","nmrih","unturned"]
+
+# Request Payment
+minimum_value_to_payment=1000000000000000000
+request_payment_database_ip=localhost
+request_payment_database_name=pte_wallets
+request_payment_database_username=pte_admin
+request_payment_database_password=supersecretpassword
+request_payment_database_tables=["tf","vintagestory","nmrih","unturned"]
