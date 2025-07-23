@@ -35,6 +35,7 @@ const helpText = `
 - distributejson: starts distributing the tokens to the loved players (json)
 - distributedb: starts distributing the tokens to the loved players (database)
 - > Executing this command will instantly start distributing, be careful
+- hostpaymentrequest: manually host the http payment server
 `;
 
 // Interface creation
@@ -44,7 +45,7 @@ const rl = readline.createInterface({
 });
 
 // Terminal welcome
-console.log("--PTE Manager 1.0--");
+console.log("--PTE Manager 1.1--");
 
 // Command proccess
 async function processInput(input) {
@@ -134,6 +135,22 @@ async function processInput(input) {
             const __dirname = dirname(__filename);
             const distributePath = resolve(__dirname, "distribute-tokens-db.js");
             exec(`node ${distributePath}`, (error, stdout, stderr) => {
+                if (error) {
+                    console.error(error);
+                    return;
+                }
+                if (stderr) {
+                    console.error(stderr);
+                    return;
+                }
+                console.log(stdout);
+            });
+        }
+        case 'hostpaymentrequest': {
+            const __filename = fileURLToPath(import.meta.url);
+            const __dirname = dirname(__filename);
+            const paymentPath = resolve(__dirname, "host-payment-request.js");
+            exec(`node ${paymentPath}`, (error, stdout, stderr) => {
                 if (error) {
                     console.error(error);
                     return;
