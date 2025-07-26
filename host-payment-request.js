@@ -43,6 +43,25 @@ function handleDisconnect() {
 }
 handleDisconnect();
 
+// #REGION Database Functions
+async function getUserData(tableName, uniqueid) {
+    return new Promise((resolve, reject) => {
+        connection.query(
+            'SELECT walletaddress, value FROM ?? WHERE uniqueid = ?',
+            [tableName, uniqueid],
+            (err, results) => {
+                if (err) {
+                    console.error("[PAYMENT] Database error: ", err);
+                    reject("Error: Database error");
+                    return;
+                }
+                resolve(results);
+            }
+        );
+    });
+}
+// #ENDREGION Database Functions
+
 const ID_REQUESTS = [];
 const MAX_REQUESTS = configs["maximum_requests_per_queue"];
 function removeIDRequest(uniqueid) {
@@ -73,7 +92,7 @@ const server = http.createServer((req, res) => {
         req.on('data', chunk => {
             body += chunk;
         });
-        req.on('end', () => {
+        req.on('end', async () => {
             try {
                 const data = JSON.parse(body);
                 const uniqueid = data.uniqueid;
@@ -91,62 +110,59 @@ const server = http.createServer((req, res) => {
                 }
 
                 ID_REQUESTS.push(uniqueid);
-                console.log("------------");
-                console.log("[PAYMENT] Payment request received from uniqueid: " + uniqueid);
+                try {
+                    console.log("------------");
+                    console.log("[PAYMENT] Payment request received from uniqueid: " + uniqueid);
 
-                connection.query(
-                    'SELECT walletaddress, value FROM ?? WHERE uniqueid = ?',
-                    [fromHeader, uniqueid],
-                    async (err, results) => {
-                        if (err) {
-                            res.writeHead(500);
-                            res.end("Error: Database error");
-                            console.error("[PAYMENT-" + uniqueid + "] " + err.stack);
-                            console.log("------------");
-                            removeIDRequest(uniqueid);
-                            return;
-                        }
-                        if (!results.length) {
-                            res.writeHead(404);
-                            res.end("Error: User not found");
-                            console.error("[PAYMENT-" + uniqueid + "] User not found");
-                            console.log("------------");
-                            removeIDRequest(uniqueid);
-                            return;
-                        }
+                    const results = await getUserData(fromHeader, uniqueid);
+                    if (!results.length) {
+                        res.writeHead(404);
+                        res.end("Error: User not found");
+                        console.error("[PAYMENT-" + uniqueid + "] User not found");
+                        console.log("------------");
+                        removeIDRequest(uniqueid);
+                        return;
+                    }
 
-                        const { walletaddress, value } = results[0];
+                    const { walletaddress, value } = results[0];
 
-                        if (!walletaddress || !value) {
-                            res.writeHead(405);
-                            res.end("Error: Wallet address or value not found");
-                            console.warn("[PAYMENT-" + uniqueid + "] Wallet address or value not found");
-                            console.log("------------");
-                            removeIDRequest(uniqueid);
-                            return;
-                        }
+                    if (!walletaddress || !value) {
+                        res.writeHead(405);
+                        res.end("Error: Wallet address or value not found");
+                        console.warn("[PAYMENT-" + uniqueid + "] Wallet address or value not found");
+                        console.log("------------");
+                        removeIDRequest(uniqueid);
+                        return;
+                    }
 
-                        if (value < configs["minimum_value_to_payment"]) {
-                            res.writeHead(406);
-                            res.end("Error: Insufficient value to process payment");
-                            console.warn("[PAYMENT-" + uniqueid + "] Ignoring because the value is too low: " + (value / 1e18) + " PTE, wallet: " + walletaddress);
-                            console.log("------------");
-                            removeIDRequest(uniqueid);
-                            return;
-                        }
+                    if (value < configs["minimum_value_to_payment"]) {
+                        res.writeHead(406);
+                        res.end("Error: Insufficient value to process payment");
+                        console.warn("[PAYMENT-" + uniqueid + "] Ignoring because the value is too low: " + (value / 1e18) + " PTE, wallet: " + walletaddress);
+                        console.log("------------");
+                        removeIDRequest(uniqueid);
+                        return;
+                    }
 
-                        if (await distributeToken(walletaddress, value)) {
+                    if (await distributeToken(walletaddress, value)) {
+                        const MAX_UPDATE_ATTEMPTS = 10;
+                        const UPDATE_RETRY_DELAY_MS = 2000;
+
+                        async function updateWalletValueWithRetry(attempt = 1) {
                             connection.query(
                                 'UPDATE ?? SET value = 0 WHERE uniqueid = ?',
                                 [fromHeader, uniqueid],
                                 async (err, rows) => {
                                     if (err || rows.affectedRows === 0) {
                                         console.error('[PAYMENT FATAL]');
-                                        console.error('[PAYMENT FATAL]');
-                                        console.error('[PAYMENT ERROR] CANNOT RESET WALLET VALUE AFTER SENDING: ' + err.stack);
+                                        console.error('[PAYMENT ERROR] CANNOT RESET WALLET VALUE AFTER SENDING: ' + (err ? err.stack : 'No rows affected'));
                                         console.error('[PAYMENT ERROR] FROM TABLE: ' + fromHeader + ", UNIQUEID:" + uniqueid);
                                         console.error('[PAYMENT FATAL]');
-                                        console.error('[PAYMENT FATAL]');
+                                        if (attempt < MAX_UPDATE_ATTEMPTS) {
+                                            console.warn(`[PAYMENT FATAL] Retrying update... Attempt ${attempt + 1}`);
+                                            setTimeout(() => updateWalletValueWithRetry(attempt + 1), UPDATE_RETRY_DELAY_MS);
+                                            return;
+                                        }
                                     }
 
                                     res.writeHead(200);
@@ -156,15 +172,24 @@ const server = http.createServer((req, res) => {
                                     removeIDRequest(uniqueid);
                                 }
                             );
-                        } else {
-                            res.writeHead(500);
-                            res.end("Error: Failed to pay, insufficient server gas or insufficient value");
-                            console.error("[PAYMENT-" + uniqueid + "] Failed to pay, insufficient server gas or insufficient value");
-                            console.log("------------");
-                            removeIDRequest(uniqueid);
                         }
+
+                        updateWalletValueWithRetry();
+                    } else {
+                        res.writeHead(500);
+                        res.end("Error: Failed to pay, insufficient server gas or insufficient value");
+                        console.error("[PAYMENT-" + uniqueid + "] Failed to pay, insufficient server gas or insufficient value");
+                        console.log("------------");
+                        removeIDRequest(uniqueid);
                     }
-                );
+                } catch (unkownError) {
+                    removeIDRequest(uniqueid);
+
+                    res.writeHead(500);
+                    res.end("Error: Server Exception");
+                    console.error("[SIMPLESKIN] Server Exception: ", unkownError);
+                    console.log("------------");
+                }
             } catch (e) {
                 res.writeHead(400);
                 res.end("Error: Invalid JSON");
