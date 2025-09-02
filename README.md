@@ -80,10 +80,13 @@ You can use the parameter ``--now`` for force pay after starting the script
 
 ``configs.txt`` needs to be setup correctly
 
-# Payment Request
+# Payment Request (HTTP)
 Server owners can create any http server for hosting payment requests, that may be used for some games or custom applications
 
 Listening ports: 8001
+
+### Running
+node host-payment-request.js
 
 ### Available Routes:
 All routes requires "from": "gamename", in the header
@@ -123,3 +126,26 @@ Text="Error: Failed to pay, insufficient server gas or insufficient value"
 Status=400
 Text="Error: Invalid JSON"
 ```
+
+# Payment Request (Database)
+Server owners can create any robot to read payment requests from a database, that may be used for some games or custom applications
+
+### Running
+- Requires distribute-tokens configurations
+- Creates the new database and tables necessary for the robot
+```sql
+CREATE DATABASE pte_payments;
+
+USE pte_payments;
+
+CREATE TABLE requests (
+    uniqueid VARCHAR(255) NOT NULL PRIMARY KEY,
+    walletaddress VARCHAR(255) DEFAULT NULL,
+    `from` VARCHAR(255) DEFAULT NULL
+);
+
+GRANT ALL PRIVILEGES ON pte_payments.* TO 'pte_admin'@'localhost' IDENTIFIED BY 'supersecretpassword' WITH GRANT OPTION; FLUSH PRIVILEGES; 
+```
+
+- Inside the scripts folders you can find the ``payment-robot-db.sh``, this shellscript will automatically pay player every set up time
+- > example: ``./payment-robot-db.sh --sleepTime 10 --distributeScript /home/user/manager/host-payment-database.js``

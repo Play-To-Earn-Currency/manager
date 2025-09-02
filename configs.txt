@@ -26,10 +26,18 @@ distribute_tokens_database_username=pte_admin
 distribute_tokens_database_password=supersecretpassword
 distribute_tokens_database_tables=["tf","vintagestory","nmrih","unturned"]
 
-# Request Payment
+# Request Payment (HTTP)
+minimum_value_to_payment=1000000000000000000
+request_payment_http_database_ip=localhost
+request_payment_http_database_name=pte_wallets
+request_payment_http_database_username=pte_admin
+request_payment_http_database_password=supersecretpassword
+request_payment_http_database_tables=["tf","vintagestory","nmrih","unturned", "left4dead2", "killingfloor2"]
+
+# Request Payment (Database)
 minimum_value_to_payment=1000000000000000000
 request_payment_database_ip=localhost
-request_payment_database_name=pte_wallets
+request_payment_database_name=pte_payments
 request_payment_database_username=pte_admin
 request_payment_database_password=supersecretpassword
-request_payment_database_tables=["tf","vintagestory","nmrih","unturned"]
+request_payment_database_tables=["tf","vintagestory","nmrih","unturned", "left4dead2", "killingfloor2"]
