@@ -111,10 +111,32 @@ async function iterateDatabaseWithLimit(databaseLength) {
                         return;
                     }
 
-                    const { _paymentWalletAddress, value } = results[0];
+                    const { paymentWalletAddress, value } = results[0];
+                    const minimumValue = configs["minimum_value_to_distribute"];
+
+                    if (value < minimumValue) {
+                        console.warn("[DISTRIBUTION " + paymentWalletAddress + " ERROR] Ignoring because the value is too low: " + (value / 1e18));
+                        // Delete payment request because value is too low
+                        connectionPayment.query('DELETE FROM ?? WHERE uniqueid = ?', ['requests', uniqueid],
+                            async (err, rows) => {
+                                if (err || rows.affectedRows === 0) {
+                                    console.error('[DISTRIBUTION FATAL]');
+                                    console.error('[DISTRIBUTION FATAL]');
+                                    console.error('[DISTRIBUTION ERROR] CANNOT REMOVE PAYMENT REQUEST AFTER MINIMUM VALUE REJECTION: ' + err.stack);
+                                    console.error('[DISTRIBUTION ERROR] FROM TABLE: ' + from + ", UNIQUEID:" + uniqueid);
+                                    console.error('[DISTRIBUTION FATAL]');
+                                    console.error('[DISTRIBUTION FATAL]');
+                                }
+                                requestsRunning--;
+                                quantityFinished++;
+                            }
+                        );
+                        return;
+                    }
 
                     const success = await distributeToken(walletaddress, value);
                     if (success) {
+                        // Reset player value from database requested because distribution was successfully
                         connectionWallet.query(
                             'UPDATE ?? SET value = 0 WHERE uniqueid = ?',
                             [from, uniqueid],
@@ -129,9 +151,20 @@ async function iterateDatabaseWithLimit(databaseLength) {
                                 }
 
                                 // Finally delete the payment request
-                                connectionPayment.query('DELETE FROM ?? WHERE uniqueid = ?', ['requests', uniqueid]);
-                                requestsRunning--;
-                                quantityFinished++;
+                                connectionPayment.query('DELETE FROM ?? WHERE uniqueid = ?', ['requests', uniqueid],
+                                    async (err, rows) => {
+                                        if (err || rows.affectedRows === 0) {
+                                            console.error('[DISTRIBUTION FATAL]');
+                                            console.error('[DISTRIBUTION FATAL]');
+                                            console.error('[DISTRIBUTION ERROR] CANNOT REMOVE PAYMENT REQUEST AFTER SENDING: ' + err.stack);
+                                            console.error('[DISTRIBUTION ERROR] FROM TABLE: ' + from + ", UNIQUEID:" + uniqueid);
+                                            console.error('[DISTRIBUTION FATAL]');
+                                            console.error('[DISTRIBUTION FATAL]');
+                                        }
+                                        requestsRunning--;
+                                        quantityFinished++;
+                                    }
+                                );
                             }
                         );
                         return;
